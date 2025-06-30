@@ -1,0 +1,428 @@
+﻿<!DOCTYPE html> 
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Auto Baccarat AI-1</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: #eef2f3;
+      color: #333;
+      max-width: 700px;
+      margin: auto;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .result {
+      font-size: 28px;
+      margin: 20px 0;
+      color: #0077cc;
+      font-weight: bold;
+      transition: color 0.5s ease;
+    }
+    .result.animate {
+      animation: glow 1s ease-in-out 3;
+    }
+    @keyframes glow {
+      0%, 100% {
+        color: #0077cc;
+        text-shadow: none;
+      }
+      50% {
+        color: #ff5722;
+        text-shadow: 0 0 8px #ff5722;
+      }
+    }
+    .buttons button,
+    .action-buttons button,
+    .import-export button {
+      margin: 5px 5px 5px 0;
+      padding: 12px 24px;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .buttons button:hover,
+    .action-buttons button:hover,
+    .import-export button:hover {
+      opacity: 0.9;
+    }
+    .buttons button:first-child {
+      background: #007bff;
+      color: white;
+    }
+    .buttons button:last-child {
+      background: #dc3545;
+      color: white;
+    }
+    .action-buttons button {
+      background: #6c757d;
+      color: white;
+    }
+    .import-export button {
+      background: #0077cc;
+      color: white;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 16px;
+      word-break: break-word;
+    }
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background: #0077cc;
+      color: white;
+    }
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    .status-ok {
+      color: green;
+      font-weight: bold;
+    }
+    .status-fail {
+      color: red;
+      font-weight: bold;
+    }
+    @media (max-width: 480px) {
+      body {
+        padding: 10px;
+      }
+      .result {
+        font-size: 22px;
+      }
+      .buttons button,
+      .action-buttons button,
+      .import-export button {
+        font-size: 16px;
+        padding: 10px 18px;
+      }
+      table {
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 6px 5px;
+      }
+    }
+  </style>
+  <script>
+    // ตรวจสอบการล็อกอิน
+    const loggedInUser = localStorage.getItem('baccarat_loggedin');
+    if (!loggedInUser) {
+      alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+      window.location.href = 'login.html';
+    }
+  </script>
+</center>
+</head>
+<center>
+<body>
+<center>
+  <div class="card">
+    <h2>Auto Baccarat AI-1</h2>
+    <div style="text-align:right; margin-bottom: 10px;">
+      <button onclick="logout()">ออกจากระบบ</button>
+    </div>
+    <div id="prediction" class="result">ผลการทำนาย: -</div>
+    <div class="buttons">
+      <button onclick="recordResult('Player')">Player </button>
+      <button onclick="recordResult('Banker')">Banker </button>
+    </div>
+    <div class="action-buttons">
+      <button onclick="removeLast()">↩️ ลบผลล่าสุด</button>
+      <button onclick="resetAll()">🧹 ล้างข้อมูลทั้งหมด</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>📈 กราฟสถิติ</h3>
+    <canvas id="chart" height="100"></canvas>
+  </div> 
+  <div class="card">
+    <div class="import-export" style="margin-top: 10px;">
+      <button onclick="exportCSV()">⬇️ Export CSV</button>
+      <button onclick="document.getElementById('importFile').click()">⬆️ Import CSV</button>
+      <input type="file" id="importFile" accept=".csv" style="display:none" onchange="importCSV(event)" />
+    </div>
+    <h3>📋 ตารางผลย้อนหลัง</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>ตา</th>
+          <th>ทายผล</th>
+          <th>ผลจริง</th>
+          <th>สถานะ</th>
+        </tr>
+      </thead>
+      <tbody id="historyTable"></tbody>
+    </table>
+  </div>
+  <script>
+    // ตัวแปรเก็บข้อมูล
+    let history = [];
+    let stats = { high: 0, low: 0 };
+    let score = [];
+    let rounds = [];
+    let currentPrediction = null;
+
+    // โหลดข้อมูลจาก LocalStorage ถ้ามี
+    function loadData() {
+      const storedHistory = localStorage.getItem('baccarat_history');
+      const storedStats = localStorage.getItem('baccarat_stats');
+      const storedScore = localStorage.getItem('baccarat_score');
+      const storedRounds = localStorage.getItem('baccarat_rounds');
+      if (storedHistory) history = JSON.parse(storedHistory);
+      if (storedStats) stats = JSON.parse(storedStats);
+      if (storedScore) score = JSON.parse(storedScore);
+      if (storedRounds) rounds = JSON.parse(storedRounds);
+    }
+
+    // บันทึกข้อมูลลง LocalStorage
+    function saveData() {
+      localStorage.setItem('baccarat_history', JSON.stringify(history));
+      localStorage.setItem('baccarat_stats', JSON.stringify(stats));
+      localStorage.setItem('baccarat_score', JSON.stringify(score));
+      localStorage.setItem('baccarat_rounds', JSON.stringify(rounds));
+    }
+
+    // ฟังก์ชันทำนายผล
+    function predict() {
+      if (history.length < 3) {
+        currentPrediction = Math.random() > 0.5 ? 'Player' : 'Banker';
+        updatePredictionUI();
+        return;
+      }
+
+      const weights = { Player: 0, Banker: 0 };
+      for (let len = 3; len <= Math.min(history.length, 10); len++) {
+        const pattern = history.slice(-len).join(',');
+        const matchCount = {};
+        for (let i = 0; i <= history.length - len - 1; i++) {
+          const subPattern = history.slice(i, i + len).join(',');
+          if (subPattern === pattern) {
+            const next = history[i + len];
+            matchCount[next] = (matchCount[next] || 0) + 1;
+          }
+        }
+        for (let result in matchCount) {
+          weights[result] += matchCount[result] * len;
+        }
+      }
+
+      if (weights['Player'] > weights['Banker']) currentPrediction = 'Player';
+      else if (weights['Banker'] > weights['Player']) currentPrediction = 'Banker';
+      else currentPrediction = Math.random() > 0.5 ? 'Player' : 'Banker';
+
+      updatePredictionUI();
+    }
+
+    // อัพเดต UI ผลการทำนาย พร้อม animation
+    function updatePredictionUI() {
+      const predDiv = document.getElementById('prediction');
+      predDiv.innerText = `ผลการทำนาย: ${currentPrediction}`;
+      predDiv.classList.remove('animate');
+      // trigger reflow to restart animation
+      void predDiv.offsetWidth;
+      predDiv.classList.add('animate');
+    }
+
+    // บันทึกผลจริงที่ผู้ใช้กด
+    function recordResult(real) {
+      history.push(real);
+      if (real === 'Player') stats.high++;
+      if (real === 'Banker') stats.low++;
+
+      const correct = real === currentPrediction;
+      score.push(score.length ? score[score.length - 1] + (correct ? 1 : -1) : (correct ? 1 : -1));
+
+      rounds.push({
+        round: rounds.length + 1,
+        prediction: currentPrediction,
+        actual: real,
+        status: correct ? '<span class="status-ok">✅ ถูก</span>' : '<span class="status-fail">❌ ผิด</span>'
+      });
+
+      saveData();
+      updateTable();
+      predict();
+      updateChart();
+    }
+
+    // อัพเดตตารางผลย้อนหลัง
+    function updateTable() {
+      const tbody = document.getElementById('historyTable');
+      tbody.innerHTML = '';
+      rounds.slice().reverse().forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.round}</td><td>${row.prediction}</td><td>${row.actual}</td><td>${row.status}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // อัพเดตกราฟ
+    function updateChart() {
+      chart.data.labels = score.map((_, i) => i + 1);
+      chart.data.datasets[0].data = score;
+      chart.update();
+    }
+
+    // ลบผลล่าสุด
+    function removeLast() {
+      if (history.length === 0) return;
+      const last = history.pop();
+      const removedRound = rounds.pop();
+      score.pop();
+      if (last === 'Player') stats.high--;
+      if (last === 'Banker') stats.low--;
+      saveData();
+      updateTable();
+      updateChart();
+      predict();
+    }
+
+    // ล้างข้อมูลทั้งหมด
+    function resetAll() {
+      if (!confirm('คุณแน่ใจหรือไม่ว่าจะล้างข้อมูลทั้งหมด?')) return;
+      history.length = 0;
+      rounds.length = 0;
+      score.length = 0;
+      stats.high = 0;
+      stats.low = 0;
+      saveData();
+      chart.data.labels = [];
+      chart.data.datasets[0].data = [];
+      chart.update();
+      updateTable();
+      document.getElementById('prediction').innerText = 'ผลการทำนาย: -';
+      currentPrediction = null;
+    }
+
+    // Export CSV
+    function exportCSV() {
+      if (rounds.length === 0) {
+        alert('ไม่มีข้อมูลให้ Export');
+        return;
+      }
+      let csvContent = 'ตา,ทายผล,ผลจริง,สถานะ\n';
+      rounds.forEach(r => {
+        // ลบ tag html ในสถานะก่อน export
+        let statusText = r.status.includes('ถูก') ? 'ถูก' : 'ผิด';
+        csvContent += `${r.round},${r.prediction},${r.actual},${statusText}\n`;
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'baccarat_history.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Import CSV
+    function importCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = e.target.result;
+        parseCSV(text);
+      };
+      reader.readAsText(file);
+      // clear input
+      event.target.value = '';
+    }
+
+    // แปลง CSV เป็นข้อมูลของเรา
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) {
+        alert('ไฟล์ CSV ไม่ถูกต้อง');
+        return;
+      }
+      const newRounds = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        if (cols.length < 4) continue;
+        const roundNum = parseInt(cols[0]);
+        const prediction = cols[1];
+        const actual = cols[2];
+        const statusText = cols[3].trim();
+        const correct = statusText === 'ถูก';
+        newRounds.push({
+          round: roundNum,
+          prediction,
+          actual,
+          status: correct ? '<span class="status-ok">✅ ถูก</span>' : '<span class="status-fail">❌ ผิด</span>'
+        });
+      }
+      if (newRounds.length === 0) {
+        alert('ไม่มีข้อมูลที่ถูกต้องในไฟล์ CSV');
+        return;
+      }
+      // รีเซ็ตข้อมูลเดิมก่อนโหลดใหม่
+      history = newRounds.map(r => r.actual);
+      rounds = newRounds;
+      stats.high = history.filter(r => r === 'Player').length;
+      stats.low = history.filter(r => r === 'Banker').length;
+      score = [];
+      rounds.forEach((r, i) => {
+        const correct = r.status.includes('ถูก');
+        score[i] = i === 0 ? (correct ? 1 : -1) : score[i - 1] + (correct ? 1 : -1);
+      });
+      saveData();
+      updateTable();
+      updateChart();
+      predict();
+      alert('นำเข้าไฟล์ CSV สำเร็จ');
+    }
+
+    // เริ่มต้นเมื่อโหลดเพจ
+    const ctx = document.getElementById('chart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'คะแนน AI (ถูก+1 / ผิด-1)',
+          data: [],
+          borderColor: '#0077cc',
+          backgroundColor: '#cce5ff',
+          fill: true,
+          tension: 0.2
+        }]
+      },
+      options: {
+        scales: { y: { beginAtZero: false } }
+      }
+    });
+
+    loadData();
+    updateTable();
+    updateChart();
+    predict();
+  </script>
+
+  <script>
+    function logout() {
+      localStorage.removeItem('baccarat_loggedin');
+      window.location.href = 'login.html';
+    }
+  </script>
+
